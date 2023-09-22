@@ -1,68 +1,134 @@
-import time, board, usb_hid
+import time
+import board
+import usb_hid
 from adafruit_neotrellis.neotrellis import NeoTrellis
-# from adafruit_hid.keyboard import Keyboard
-# from adafruit_hid.keyboard_layout_us import KeyboardLayoutUS
-# from adafruit_hid.keycode import Keycode, ConsumerCode
+from adafruit_hid.keyboard import Keyboard
+from adafruit_hid.keycode import Keycode
+from adafruit_hid.consumer_control import ConsumerControl
+from adafruit_hid.consumer_control_code import ConsumerControlCode
+from adafruit_led_animation import color
+from adafruit_led_animation.animation import pulse
 
-# create the i2c object for the trellis
-i2c_bus = board.I2C()  # uses board.SCL and board.SDA
-# i2c_bus = board.STEMMA_I2C()  # For using the built-in STEMMA QT connector on a microcontroller
 
-# keyboard definitions
-# macropad = 
+class MyButton:
+    def __init__(self, bind, code_type, press_color, standby_color=None):
+        self.bind = bind
+        self.code_type = code_type  # 1 if Keycode, 0 if ConsumerControlCode
+        self.press_color = press_color
+        if standby_color is not None:
+            self.standby_color = standby_color
+        else:
+            self.standby_color = press_color
 
-# create the trellis
-trellis = NeoTrellis(i2c_bus)
+class MyMacroPad:
+    def __init__(self):
 
-# Set the brightness value (0 to 1.0)
-trellis.brightness = 0.5
-
-# some color definitions
-OFF = (0, 0, 0)
-RED = (255, 0, 0)
-YELLOW = (255, 150, 0)
-GREEN = (0, 255, 0)
-CYAN = (0, 255, 255)
-BLUE = (0, 0, 255)
-PURPLE = (180, 0, 255)
-
-sleep_timer = 5
-sleep_time_start = time.time()
-
-def disp_key_val(event):
-    sleep_time_start = time.time()
-    trellis_unsleep()
-    time.sleep(1)
-    if event.edge == NeoTrellis.EDGE_RISING:
-        print("Event: {} press".format(event.number))
-        trellis.pixels[event.number] = CYAN
-    elif event.edge == NeoTrellis.EDGE_FALLING:
-        print("Event: {} release".format(event.number))
-        trellis.pixels[event.number] = GREEN
-        time.sleep(0.5)
-        trellis.pixels[event.number] = OFF
-    time.sleep(1)
+        i2c_bus = board.I2C()
+        self.trellis = NeoTrellis(i2c_bus)
         
-# def breathe(event):
+        self.active_brightness = 0.7
+        self.sleep_brightness = 0.1
+        
+        self.trellis.brightness = self.active_brightness
 
-for i in range(16):
-    trellis.activate_key(i, NeoTrellis.EDGE_RISING)
-    trellis.activate_key(i, NeoTrellis.EDGE_FALLING)
-    trellis.callbacks[i] = disp_key_val
-    trellis.pixels[i] = PURPLE
-    time.sleep(0.1)
-    trellis.pixels[i] = OFF
+        self.number_of_buttons = 16
+        self.press_color_default_map = {'CCODE': color.GOLD, 'KCODE': color.CYAN, 'MACRO': color.GOLD}
+        self.release_color = color.BLACK
+        self.boot_color = color.AQUA
+        self.no_kb_color = color.WHITE
+        self.animate_color_sequence = [color.GOLD, color.AMBER, color.ORANGE]
 
-def trellis_sleep():
-    for i in range(16):
-        trellis.pixels[i] = RED
+        self.kbd = Keyboard(usb_hid.devices)
+        self.cc = ConsumerControl(usb_hid.devices)
 
-def trellis_unsleep():
-    for i in range(16):
-        trellis.pixels[i] = OFF
+        self.code_map = {'CCODE': 0, 'KCODE': 1, 'MACRO': 3}
 
-while True:
-    trellis.sync()
-    time.sleep(0.02)
-    if time.time() - sleep_time_start >= sleep_timer:
-        trellis_sleep()
+        self.kbd_map = {}
+        self.define_keymap()
+        
+        self.boot_sequence()
+
+        self.sleep_timer = 5
+        self.time_record = time.time()
+#         self.brightness_scaler = self.active_brightness
+#         self.pulse_timer = 3
+
+    def define_keymap(self):
+        
+        self.kbd_map = {
+                0:  MyButton([Keycode.CONTROL, Keycode.S],                  self.code_map['KCODE'], self.press_color_default_map['KCODE']),
+                2:  MyButton([Keycode.WINDOWS, Keycode.TWO],                self.code_map['KCODE'], color.PURPLE),
+                3:  MyButton([Keycode.WINDOWS, Keycode.ONE],                self.code_map['KCODE'], color.RED),
+                7:  MyButton([Keycode.CONTROL, Keycode.ONE],                self.code_map['KCODE'], color.RED),
+                11: MyButton([Keycode.CONTROL, Keycode.TWO],                self.code_map['KCODE'], color.RED),                
+                15: MyButton([ConsumerControlCode.SCAN_PREVIOUS_TRACK],     self.code_map['CCODE'], self.press_color_default_map['CCODE']),
+                14: MyButton([ConsumerControlCode.PLAY_PAUSE],              self.code_map['CCODE'], self.press_color_default_map['CCODE']),
+                13: MyButton([ConsumerControlCode.SCAN_NEXT_TRACK],         self.code_map['CCODE'], self.press_color_default_map['CCODE']),
+                12: MyButton([ConsumerControlCode.MUTE],                    self.code_map['CCODE'], self.press_color_default_map['CCODE'])
+            }
+
+        for i in range(self.number_of_buttons):
+            if i not in self.kbd_map:
+                self.kbd_map[i] = MyButton(None, None, self.no_kb_color)
+
+    def operation_loop(self):
+        self.time_record = time.time()
+        while True:
+            self.trellis.sync()
+            time.sleep(0.02)
+            if time.time() - self.time_record >= self.sleep_timer:
+                self.trellis.brightness = self.sleep_brightness
+
+    def button_press(self, button):
+        self.time_record = time.time()
+        self.trellis.brightness = self.active_brightness
+        if self.kbd_map[button].code_type is None:  # Undefined binding
+            print(f'Undefined button: {button}')
+        elif self.kbd_map[button].code_type == self.code_map['KCODE']: # Keycode binding
+            self.kbd.send(*self.kbd_map[button].bind)
+        elif self.kbd_map[button].code_type == self.code_map['CCODE']: # ConsumerControlCode binding
+            self.cc.send(*self.kbd_map[button].bind)
+        elif self.kbd_map[button].code_type == self.code_map['MACRO']:
+            self.macro_run(self.kbd_map[button].bind)
+        else:
+            print(f'Button issue')
+
+    def boot_sequence(self):
+        for i in range(self.number_of_buttons):
+            # activate rising edge events on all keys
+            self.trellis.activate_key(i, NeoTrellis.EDGE_RISING)
+            # activate falling edge events on all keys
+            self.trellis.activate_key(i, NeoTrellis.EDGE_FALLING)
+            # set all keys to trigger the blink callback
+            self.trellis.callbacks[i] = self.button_call_wrapper
+
+        self.color_cycle(self.boot_color, 0.01)
+        time.sleep(0.2)
+        self.color_cycle(self.release_color, 0.01)
+        self.color_cycle()
+
+    def color_cycle(self, color_value = None, sleep_time = 0.01):
+        for i in range(self.number_of_buttons):
+            if color_value is not None:
+                self.trellis.pixels[i] = color_value
+            else:
+                self.trellis.pixels[i] = self.kbd_map[i].standby_color
+            time.sleep(sleep_time)
+
+    def button_call_wrapper(self, event):
+        button = event.number
+
+        if event.edge == NeoTrellis.EDGE_RISING:
+            self.trellis.pixels[button] = self.kbd_map[button].press_color
+            self.button_press(button)
+
+        elif event.edge == NeoTrellis.EDGE_FALLING:
+            self.trellis.pixels[button] = self.kbd_map[button].standby_color
+
+#         elif time.time() - self.time_record >= self.sleep_timer:
+#             self.sleep_lights()
+
+if __name__ == "__main__":
+    MPad = MyMacroPad()
+    MPad.operation_loop()
+
