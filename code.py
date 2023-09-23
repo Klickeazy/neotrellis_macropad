@@ -31,20 +31,22 @@ class MyMacroPad:
 
         # Set constants
         self.number_of_buttons = 16
-        self.active_brightness = 0.7
-        self.standby_timer = 5
+        self.active_brightness = 0.1
+        self.standby_timer = 30
         self.standby_flag = False
-        self.standby_brightness = 0.1
-        self.sleep_timer = 60
+        self.standby_brightness = 0.05
+        self.sleep_timer = 300
         self.sleep_flag = False
         self.sleep_brightness = 0
         self.keypress_map = {'CCODE': 0, 'KCODE': 1, 'MACRO': 3, 'WAKE': 4}
-        self.press_color_default_map = {'CCODE': color.GOLD, 'KCODE': color.CYAN, 'MACRO': color.GOLD}
+        self.press_color_default_map = {'CCODE': color.GOLD, 'KCODE': color.CYAN, 'MACRO': color.AMBER}
         self.release_color = color.BLACK
         self.boot_color = color.AQUA
         self.no_kb_color = color.WHITE
         self.animate_color_sequence = [color.GOLD, color.AMBER, color.ORANGE]
         self.kbd_map = {}
+        self.volume_step = 2
+        self.min_sleeptime = 0.01
 
         # Initialize
         self.trellis.brightness = self.active_brightness
@@ -59,7 +61,9 @@ class MyMacroPad:
                 0:  MyButton([Keycode.CONTROL, Keycode.S],                  self.keypress_map['KCODE'], self.press_color_default_map['KCODE']),
                 2:  MyButton([Keycode.WINDOWS, Keycode.TWO],                self.keypress_map['KCODE'], color.PURPLE),
                 3:  MyButton([Keycode.WINDOWS, Keycode.ONE],                self.keypress_map['KCODE'], color.RED),
+                4:  MyButton(['volume_down'],                               self.keypress_map['MACRO'], self.press_color_default_map['MACRO']),
                 7:  MyButton([Keycode.CONTROL, Keycode.ONE],                self.keypress_map['KCODE'], color.RED),
+                8:  MyButton(['volume_up'],                                 self.keypress_map['MACRO'], self.press_color_default_map['MACRO']),
                 10: MyButton([Keycode.SHIFT, Keycode.F10],                  self.keypress_map['KCODE'], color.GREEN),
                 11: MyButton([Keycode.CONTROL, Keycode.TWO],                self.keypress_map['KCODE'], color.RED),
                 12: MyButton([ConsumerControlCode.MUTE],                    self.keypress_map['CCODE'], self.press_color_default_map['CCODE']),
@@ -98,11 +102,23 @@ class MyMacroPad:
             elif self.kbd_map[button].keybind_type == self.keypress_map['CCODE']: # ConsumerControlCode binding
                 self.cc.send(*self.kbd_map[button].bind)
             elif self.kbd_map[button].keybind_type == self.keypress_map['MACRO']: # Macro binding
-                self.macro_run(self.kbd_map[button].bind)
-            elif self.kbd_map[button].keybind_type == self.keypress_map['WAKE']:
-                pass
+                self.macro_run(*self.kbd_map[button].bind)
+#             elif self.kbd_map[button].keybind_type == self.keypress_map['WAKE']:
+#                 pass
             else:
                 print(f'Button issue')
+
+    def macro_run(self, macro_id):
+        if macro_id == 'volume_up':
+            for i in range(self.volume_step):
+                self.cc.send(ConsumerControlCode.VOLUME_INCREMENT)
+                time.sleep(self.min_sleeptime)
+        elif macro_id == 'volume_down':
+            for i in range(self.volume_step):
+                self.cc.send(ConsumerControlCode.VOLUME_DECREMENT)
+                time.sleep(self.min_sleeptime)
+        else:
+            print('Macro not defined')
 
     def boot_sequence(self):
         for i in range(self.number_of_buttons):
@@ -113,40 +129,41 @@ class MyMacroPad:
             # set all keys to trigger the blink callback
             self.trellis.callbacks[i] = self.button_call_wrapper
 
-        self.color_cycle(self.boot_color, 0.01)
-        time.sleep(0.2)
-        self.color_cycle(self.release_color, 0.01)
-        self.trellis.brightness = 0
-        self.color_cycle()
-        self.trellis.brightness = self.active_brightness
+        self.color_cycle(self.boot_color)
+        time.sleep(2*self.min_sleeptime)
+        # self.color_cycle(self.release_color)
+        self.color_wave_off()
+        time.sleep(2*self.min_sleeptime)
+        self.color_wave_on()
+        # self.trellis.brightness = 0
+#         self.color_cycle()
+#         self.trellis.brightness = self.active_brightness
 
-    def color_cycle(self, color_value = None, sleep_time = 0.01):
+    def color_cycle(self, color_value = None):
         for i in range(self.number_of_buttons):
             if color_value is not None:
                 self.trellis.pixels[i] = color_value
             else:
                 self.trellis.pixels[i] = self.kbd_map[i].standby_color
-            time.sleep(sleep_time)
+            time.sleep(self.min_sleeptime)
 
     def color_wave_off(self):
-        sleep_time = 0.01
         for i in range(int(self.number_of_buttons/2)):
             self.trellis.pixels[i] = self.release_color
-            time.sleep(sleep_time)
+            time.sleep(self.min_sleeptime)
             self.trellis.pixels[self.number_of_buttons - i - 1] = self.release_color
-            time.sleep(sleep_time)
+            time.sleep(self.min_sleeptime)
         self.trellis.brightness = self.sleep_brightness
         self.sleep_flag = True
 
     def color_wave_on(self):
         self.color_cycle(self.release_color)
-        sleep_time = 0.01
         self.trellis.brightness = self.active_brightness
         for i in range(int(self.number_of_buttons/2)):
             self.trellis.pixels[i] = self.kbd_map[i].standby_color
-            time.sleep(sleep_time)
+            time.sleep(self.min_sleeptime)
             self.trellis.pixels[self.number_of_buttons - i - 1] = self.kbd_map[self.number_of_buttons - i - 1].standby_color
-            time.sleep(sleep_time)
+            time.sleep(self.min_sleeptime)
         self.standby_flag, self.sleep_flag = False, False
 
 
