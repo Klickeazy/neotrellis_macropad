@@ -62,11 +62,13 @@ class MyMacroPad:
                 2:  MyButton([Keycode.WINDOWS, Keycode.TWO],                self.keypress_map['KCODE'], color.PURPLE),
                 3:  MyButton([Keycode.WINDOWS, Keycode.ONE],                self.keypress_map['KCODE'], color.RED),
                 4:  MyButton(['volume_down'],                               self.keypress_map['MACRO'], self.press_color_default_map['MACRO']),
+                5:  MyButton([Keycode.CONTROL, Keycode.PAGE_DOWN],          self.keypress_map['KCODE'], color.RED),
                 7:  MyButton([Keycode.CONTROL, Keycode.ONE],                self.keypress_map['KCODE'], color.RED),
                 8:  MyButton(['volume_up'],                                 self.keypress_map['MACRO'], self.press_color_default_map['MACRO']),
+                9:  MyButton([Keycode.CONTROL, Keycode.PAGE_UP],            self.keypress_map['KCODE'], color.RED),
                 10: MyButton([Keycode.SHIFT, Keycode.F10],                  self.keypress_map['KCODE'], color.GREEN),
                 11: MyButton([Keycode.CONTROL, Keycode.TWO],                self.keypress_map['KCODE'], color.RED),
-                12: MyButton([ConsumerControlCode.MUTE],                    self.keypress_map['CCODE'], self.press_color_default_map['CCODE']),
+                12: MyButton([ConsumerControlCode.MUTE],                    self.keypress_map['CCODE'], color.ORANGE),
                 13: MyButton([ConsumerControlCode.SCAN_NEXT_TRACK],         self.keypress_map['CCODE'], self.press_color_default_map['CCODE']),
                 14: MyButton([ConsumerControlCode.PLAY_PAUSE],              self.keypress_map['CCODE'], self.press_color_default_map['CCODE']),
                 15: MyButton([ConsumerControlCode.SCAN_PREVIOUS_TRACK],     self.keypress_map['CCODE'], self.press_color_default_map['CCODE'])
@@ -183,4 +185,3 @@ class MyMacroPad:
 if __name__ == "__main__":
     MPad = MyMacroPad()
     MPad.operation_loop()
-
